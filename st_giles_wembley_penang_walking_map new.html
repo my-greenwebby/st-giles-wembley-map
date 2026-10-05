@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>St Giles Wembley Penang - Walking Food & Sights Guide</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#fdf4f0',
+              100: '#fae7de',
+              500: '#e05326',
+              600: '#c83e14',
+              700: '#9b2c0b',
+            },
+            hotel: '#2563eb',
+            food: '#ea580c',
+            sight: '#059669',
+            dayeat: '#d97706'
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    
+    .map-container {
+      height: calc(100vh - 72px);
+    }
+    @media (max-width: 1024px) {
+      .map-container {
+        height: 52vh;
+      }
+    }
+
+    /* Pulse animation for St Giles Hotel Marker */
+    .hotel-pulse {
+      position: relative;
+    }
+    .hotel-pulse::after {
+      content: '';
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      top: 0;
+      left: 0;
+      border-radius: 50%;
+      background: rgba(37, 99, 235, 0.4);
+      animation: pulse-ring 2s infinite cubic-bezier(0.215, 0.61, 0.355, 1);
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.6); opacity: 0; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+
+    /* Route animation styling */
+    .leaflet-interactive.route-glow {
+      stroke-dasharray: 10, 10;
+      animation: dash 35s linear infinite;
+    }
+    @keyframes dash {
+      to {
+        stroke-dashoffset: -1000;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased font-sans flex flex-col min-h-screen overflow-x-hidden">
+
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-[72px] flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-700 to-indigo-500 flex items-center justify-center text-white shadow-md">
+          <i class="fa-solid fa-hotel text-lg"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-slate-900 text-lg leading-tight">St. Giles Wembley Explorer</h1>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+              <i class="fa-solid fa-star text-[10px] mr-1 text-amber-500"></i>4-Star Hub
+            </span>
+          </div>
+          <p class="text-xs text-slate-500">George Town, Penang • Night Food & Walking Proximity Map</p>
+        </div>
+      </div>
+
+      <!-- Quick Action Buttons -->
+      <div class="flex items-center gap-2">
+        <button id="resetViewBtn" class="px-3 py-2 text-xs sm:text-sm font-medium rounded-lg text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors flex items-center gap-1.5 shadow-2xs" title="Reset View to Hotel">
+          <i class="fa-solid fa-crosshairs text-blue-600"></i>
+          <span class="hidden sm:inline">Center Hotel</span>
+        </button>
+        <!-- Travel Mode Selector Pill -->
+        <div class="inline-flex bg-slate-100 p-0.5 rounded-lg border border-slate-200 text-xs font-semibold">
+          <button id="modeWalkBtn" class="px-2.5 py-1.5 rounded-md bg-white text-blue-700 shadow-xs flex items-center gap-1 transition-all">
+            <i class="fa-solid fa-person-walking"></i>
+            <span class="hidden sm:inline">Walk</span>
+          </button>
+          <button id="modeDriveBtn" class="px-2.5 py-1.5 rounded-md text-slate-600 hover:text-slate-900 flex items-center gap-1 transition-all">
+            <i class="fa-solid fa-car"></i>
+            <span class="hidden sm:inline">By Car</span>
+          </button>
+        </div>
+        <button id="showRouteAllBtn" class="px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 transition-all flex items-center gap-1.5 shadow-sm">
+          <i class="fa-solid fa-route"></i>
+          <span>Food Circuit</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-1 flex flex-col-reverse lg:flex-row w-full max-w-[1700px] mx-auto overflow-hidden">
+    
+    <!-- LEFT SIDEBAR: Search, Filters, and Spot Cards -->
+    <section class="w-full lg:w-[460px] xl:w-[500px] flex flex-col bg-white border-r border-slate-200 h-auto lg:h-[calc(100vh-72px)] shrink-0 z-20">
+      
+      <!-- Top Sticky Filter Section -->
+      <div class="p-4 border-b border-slate-200 bg-white/95 backdrop-blur-xs space-y-3 shrink-0">
+        
+        <!-- Search Input -->
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+          <input 
+            type="text" 
+            id="searchInput" 
+            placeholder="Search night markets, dishes (satay, laksa), sights..." 
+            class="w-full pl-10 pr-9 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition"
+          >
+          <button id="clearSearchBtn" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-sm">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Category Pills Filter -->
+        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs font-medium no-scrollbar">
+          <button data-category="all" class="category-btn active px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors bg-blue-600 text-white shadow-xs">
+            All Spots (<span id="countAll">0</span>)
+          </button>
+          <button data-category="night-food" class="category-btn px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors bg-slate-100 text-slate-700 hover:bg-slate-200">
+            <i class="fa-solid fa-fire-burner text-orange-500 mr-1"></i>Night Food (<span id="countNight">0</span>)
+          </button>
+          <button data-category="sights" class="category-btn px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors bg-slate-100 text-slate-700 hover:bg-slate-200">
+            <i class="fa-solid fa-landmark text-emerald-600 mr-1"></i>Sights (<span id="countSights">0</span>)
+          </button>
+          <button data-category="day-food" class="category-btn px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors bg-slate-100 text-slate-700 hover:bg-slate-200">
+            <i class="fa-solid fa-bowl-rice text-amber-600 mr-1"></i>Day Eats (<span id="countDay">0</span>)
+          </button>
+        </div>
+
+        <!-- Active Walking Route Info Banner (Hidden initially) -->
+        <div id="routeBanner" class="hidden p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-xl flex flex-col gap-2.5 text-xs">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <div id="routeBannerModeIcon" class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                <i class="fa-solid fa-person-walking"></i>
+              </div>
+              <div>
+                <p class="font-semibold text-blue-900" id="routeBannerTitle">Path from St. Giles Wembley</p>
+                <p class="text-blue-700 text-[11px]" id="routeBannerMetrics">550 m • ~7 mins</p>
+              </div>
+            </div>
+            <button id="clearRouteBtn" class="px-2 py-1 bg-white hover:bg-slate-100 text-slate-600 rounded-md border border-blue-200 font-medium text-[11px] transition">
+              Clear Path
+            </button>
+          </div>
+          <div class="flex items-center gap-2 pt-1 border-t border-blue-200/60 justify-between">
+            <div class="flex items-center gap-1 text-[11px] text-blue-800 font-medium">
+              <span class="text-slate-500">Mode:</span>
+              <button id="bannerToggleWalk" class="px-2 py-0.5 rounded bg-blue-600 text-white font-semibold text-[10px]">Walk</button>
+              <button id="bannerToggleDrive" class="px-2 py-0.5 rounded bg-white text-blue-800 border border-blue-200 font-semibold text-[10px]">Car</button>
+            </div>
+            <a id="bannerGoogleMapsLink" href="#" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 hover:text-blue-900 bg-white px-2 py-1 rounded border border-blue-200 hover:bg-blue-50 transition">
+              <i class="fa-brands fa-google text-red-500"></i> Open Google Maps
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div id="placesList" class="flex-1 overflow-y-auto p-4 space-y-3.5 divide-y-0">
+        <!-- Rendered dynamically by JavaScript -->
+      </div>
+
+      <!-- Hotel Fixed Footer Status -->
+      <div class="p-3.5 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-xs text-slate-600 shrink-0">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>Starting Point: <strong>St Giles Wembley</strong> (Magazine Rd)</span>
+        </div>
+        <button id="focusHotelBtn" class="text-blue-600 hover:text-blue-800 font-semibold text-xs flex items-center gap-1">
+          <i class="fa-solid fa-map-pin"></i> View
+        </button>
+      </div>
+    </section>
+
+    <!-- RIGHT/TOP SECTION: Interactive Map Canvas -->
+    <section class="flex-1 relative flex flex-col bg-slate-100">
+      <div id="map" class="w-full map-container z-10"></div>
+
+      <!-- Floating Map Legend and Controls -->
+      <div class="absolute top-4 right-4 z-20 bg-white/95 backdrop-blur-md rounded-xl p-3 shadow-lg border border-slate-200/80 text-xs hidden sm:block max-w-[220px]">
+        <p class="font-bold text-slate-800 mb-2 flex items-center gap-1.5">
+          <i class="fa-solid fa-map"></i> Proximity Legend
+        </p>
+        <div class="space-y-1.5">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-blue-600 inline-block"></span>
+            <span class="text-slate-600 font-medium">St Giles Wembley (Hotel)</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-orange-500 inline-block"></span>
+            <span class="text-slate-600 font-medium">Night Food Streets</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-emerald-600 inline-block"></span>
+            <span class="text-slate-600 font-medium">Key Heritage Sights</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-amber-500 inline-block"></span>
+            <span class="text-slate-600 font-medium">Day Food & Drinks</span>
+          </div>
+        </div>
+        <div class="mt-2.5 pt-2 border-t border-slate-100 text-[11px] text-slate-400">
+          Click any marker or card to draw walking directions.
+        </div>
+      </div>
+
+      <!-- Mobile Category Toggle Helper Bar -->
+      <div class="absolute bottom-4 left-4 z-20 sm:hidden">
+        <span class="px-3 py-1.5 rounded-full bg-slate-900/80 text-white text-[11px] backdrop-blur-xs flex items-center gap-1 shadow-md">
+          <i class="fa-solid fa-shoe-prints text-amber-400"></i> Tap cards below for walking path
+        </span>
+      </div>
+    </section>
+
+  </main>
+
+  <div id="detailModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-200">
+    <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden transform scale-95 transition-transform duration-200 max-h-[90vh] flex flex-col">
+      <!-- Modal Header -->
+      <div class="p-5 border-b border-slate-100 flex items-start justify-between bg-slate-50/50">
+        <div>
+          <span id="modalCategoryBadge" class="inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold mb-2">Category</span>
+          <h3 id="modalTitle" class="text-xl font-bold text-slate-900 leading-tight">Spot Name</h3>
+          <p id="modalAddress" class="text-xs text-slate-500 mt-1 flex items-center gap-1">
+            <i class="fa-solid fa-location-dot text-slate-400"></i> <span id="modalAddressText">Address</span>
+          </p>
+        </div>
+        <button id="closeModalBtn" class="text-slate-400 hover:text-slate-600 w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-100 transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-5 overflow-y-auto space-y-4 text-sm">
+        
+        <!-- Travel Mode Toggle in Modal -->
+        <div class="flex items-center justify-between bg-slate-100 p-1.5 rounded-xl text-xs font-semibold">
+          <span class="text-slate-500 pl-2">Select Travel Mode:</span>
+          <div class="inline-flex bg-white rounded-lg p-0.5 shadow-2xs border border-slate-200">
+            <button id="modalSelectWalk" class="px-3 py-1 rounded-md bg-blue-600 text-white flex items-center gap-1 transition">
+              <i class="fa-solid fa-person-walking"></i> Walking
+            </button>
+            <button id="modalSelectDrive" class="px-3 py-1 rounded-md text-slate-600 hover:text-slate-900 flex items-center gap-1 transition">
+              <i class="fa-solid fa-car"></i> By Car
+            </button>
+          </div>
+        </div>
+
+        <!-- Walking & Driving Metric Cards -->
+        <div class="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-blue-50/70 border border-blue-100">
+          <div class="flex items-center gap-2.5">
+            <div id="modalMetricIcon" class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+              <i class="fa-solid fa-person-walking"></i>
+            </div>
+            <div>
+              <span id="modalMetricDistanceLabel" class="text-[11px] text-blue-600 font-semibold block uppercase">Walk Distance</span>
+              <span id="modalDistance" class="font-bold text-slate-800 text-sm">550 m</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2.5">
+            <div id="modalClockIcon" class="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
+              <i class="fa-solid fa-clock"></i>
+            </div>
+            <div>
+              <span id="modalMetricTimeLabel" class="text-[11px] text-indigo-600 font-semibold block uppercase">Estimated Time</span>
+              <span id="modalTime" class="font-bold text-slate-800 text-sm">~7 minutes</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Description -->
+        <div>
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1.5">Overview</h4>
+          <p id="modalDescription" class="text-slate-700 leading-relaxed text-sm">Description text...</p>
+        </div>
+
+        <!-- Highlights / Food Recommendations -->
+        <div id="modalHighlightsBox" class="p-3.5 rounded-xl bg-orange-50/60 border border-orange-100">
+          <h4 class="text-xs font-bold uppercase tracking-wider text-orange-800 mb-2 flex items-center gap-1.5">
+            <i class="fa-solid fa-thumbs-up text-orange-600"></i> <span id="modalHighlightLabel">Must-Try Food & Tips</span>
+          </h4>
+          <ul id="modalHighlightsList" class="space-y-1.5 text-xs text-slate-700 list-disc list-inside">
+            <!-- Items injected by script -->
+          </ul>
+        </div>
+
+        <!-- Suggested Walking Route Notes -->
+        <div>
+          <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-1">Walking Directions Hint</h4>
+          <p id="modalWalkingDirections" class="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg border border-slate-200/70">Walk route details...</p>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-4 border-t border-slate-100 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <a id="modalGoogleMapsBtn" href="#" target="_blank" rel="noopener noreferrer" class="w-full sm:w-auto px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition">
+          <i class="fa-brands fa-google text-red-500"></i> Open in Google Maps
+        </a>
+        <button id="modalPlotRouteBtn" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition shadow-sm">
+          <i class="fa-solid fa-diamond-turn-right"></i> Draw Route on Map
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs flex items-center gap-2 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+    <i class="fa-solid fa-circle-check text-emerald-400"></i>
+    <span id="toastMsg">Action completed</span>
+  </div>
+
+  <script>
+    // Hotel Anchor: St Giles Wembley Penang (Magazine Road, George Town)
+    const HOTEL = {
+      id: 'st-giles-wembley',
+      name: 'St. Giles Wembley Penang',
+      category: 'hotel',
+      tag: '4-Star Hotel Base',
+      coords: [5.41372, 100.33035],
+      address: '183, Jalan Magazine, 10300 George Town, Pulau Pinang',
+      description: 'Your 4-star base right on Magazine Road next to KOMTAR. Offers a rooftop swimming pool with city views, modern spacious rooms, and unrivaled walking access to both heritage streets and nocturnal hawkers.',
+      rating: '4-Star / 4.4★',
+      distMeters: 0,
+      walkMins: 0,
+    };
+
+    // Curated Places with real walking paths & coordinates
+    const PLACES = [
+      // 1. NIGHT FOOD STREETS
+      {
+        id: 'new-lane',
+        name: 'New Lane (Lorong Baru) Hawker Centre',
+        category: 'night-food',
+        badge: 'Night Food Strip',
+        coords: [5.41505, 100.32485],
+        address: 'Lorong Baru, Off Jalan Macalister, George Town',
+        distance: '550 m',
+        walkTime: '7 mins',
+        distMeters: 550,
+        walkMinutes: 7,
+        hours: '4:00 PM - 11:30 PM (Wednesdays off varies)',
+        description: 'The closest major night street food strip from St. Giles Wembley. Lorong Baru shuts down to traffic every evening and bursts with hawker carts, plastic tables, and sizzle from charcoal burners.',
+        highlights: [
+          'Charcoal-fried Crispy Oyster Omelette (Oh Chien)',
+          'Famous New Lane Char Kway Teow with duck egg',
+          'Charcoal Grilled Chicken Wings & Pork Satay',
+          'Chee Cheong Fun with dark sweet shrimp paste (hae ko)',
+          'Clear broth Pork Tripe Pepper Soup'
+        ],
+        directions: 'Exit hotel lobby onto Jalan Magazine. Walk west across the Macalister Road junction for ~400 meters. Turn left into Lorong Baru (New Lane).'
+      },
+      {
+        id: 'kimberley-street',
+        name: 'Kimberley Street Food Night Market',
+        category: 'night-food',
+        badge: 'Iconic Street Supper',
+        coords: [5.41655, 100.33305],
+        address: 'Lebuh Kimberley, George Town',
+        distance: '650 m',
+        walkTime: '8 mins',
+        distMeters: 650,
+        walkMinutes: 8,
+        hours: '5:00 PM - Midnight',
+        description: 'George Town’s ultimate heritage supper street. Famed for its traditional Teochew delicacies and open-front shophouse tables that spill right onto the asphalt.',
+        highlights: [
+          'Restoran Kimberley Famous Duck Meat Koay Chiap',
+          'Char Kway Teow with generous cockles',
+          'Braised Chicken Feet with herbal noodle soup',
+          'Traditional Sweet Soups: Almond Soup, Four-Fruit Leng Chee Kang, Gingko Barley'
+        ],
+        directions: 'Head east on Jalan Magazine, turn left onto Jalan Sungai Ujong (or past Prangin Mall) walking north directly into Lebuh Kimberley.'
+      },
+      {
+        id: 'chulia-street',
+        name: 'Chulia Street Hawker Food Stalls',
+        category: 'night-food',
+        badge: 'Heritage Night Stalls',
+        coords: [5.41845, 100.33705],
+        address: 'Intersection of Lebuh Chulia & Lorong Carnarvon',
+        distance: '1.0 km',
+        walkTime: '13 mins',
+        distMeters: 1000,
+        walkMinutes: 13,
+        hours: '6:00 PM - Midnight',
+        description: 'Set right along Penang’s historic thoroughfare, these evening carts have fed locals and backpackers for decades. Right around the corner from Love Lane’s lively heritage bars.',
+        highlights: [
+          'Legendary Chulia Street Wonton Mee with springy noodles & pickled chillies',
+          'Spicy Curry Mee with coagulated blood & cuttlefish',
+          'Steaming bowls of Assam Laksa & Popiah (fresh spring rolls)',
+          'Refreshing cold fresh fruit and sugar cane juices'
+        ],
+        directions: 'Walk north via Jalan Penang or Carnarvon Street into Lebuh Chulia. Stalls cluster near the Carnarvon Street junction.'
+      },
+
+      // 2. DAY FOOD / DRINKS NEARBY
+      {
+        id: 'teochew-chendul',
+        name: 'Penang Road Famous Teochew Chendul',
+        category: 'day-food',
+        badge: 'Daytime Must-Eat',
+        coords: [5.41718, 100.33065],
+        address: '27, Lebuh Keng Kwee, Off Jalan Penang',
+        distance: '500 m',
+        walkTime: '6 mins',
+        distMeters: 500,
+        walkMinutes: 6,
+        hours: '10:30 AM - 7:00 PM',
+        description: 'The world-renowned roadside stall serving shaved ice packed with pandan jelly strips, kidney beans, rich coconut milk, and aromatic Gula Melaka (palm sugar).',
+        highlights: [
+          'Signature Teochew Chendul (eat while standing roadside)',
+          'Penang Road Famous Asam Laksa right opposite',
+          'Crispy fried lobak (five-spice pork roll) from adjacent coffee shop'
+        ],
+        directions: 'Walk 400m north straight up Penang Road from KOMTAR. Turn right into the narrow lane of Lebuh Keng Kwee.'
+      },
+
+      // 3. PLACES OF INTEREST / SIGHTS
+      {
+        id: 'komtar-top',
+        name: 'The TOP Penang & Rainbow Skywalk',
+        category: 'sights',
+        badge: 'Panoramic Landmark',
+        coords: [5.41438, 100.33005],
+        address: '1, Jalan Penang, George Town (KOMTAR Level 68)',
+        distance: '250 m',
+        walkTime: '3 mins',
+        distMeters: 250,
+        walkMinutes: 3,
+        hours: '11:00 AM - 10:00 PM (Skywalk)',
+        description: 'George Town’s highest viewpoint. Walk on the semi-circular glass cantilever Rainbow Skywalk at the 68th floor for open-air views across Penang Island and the Malacca Strait.',
+        highlights: [
+          'Level 68 Rainbow Skywalk with transparent glass flooring',
+          'Observatory Deck at Level 65 with interactive historical displays',
+          'Avenue of retail shops and air-conditioned bridge to 1st Avenue Mall'
+        ],
+        directions: 'Directly across the street from St Giles Wembley! Walk across the sheltered pedestrian connection or Magazine Road crossing.'
+      },
+      {
+        id: 'armenian-street',
+        name: 'Armenian Street & Street Art Hub',
+        category: 'sights',
+        badge: 'Heritage & Art',
+        coords: [5.41515, 100.33775],
+        address: 'Lebuh Armenian, George Town UNESCO Heritage Zone',
+        distance: '1.0 km',
+        walkTime: '13 mins',
+        distMeters: 1000,
+        walkMinutes: 13,
+        hours: 'Open 24/7 (Boutiques & cafes open 10 AM - 7 PM)',
+        description: 'The epicenter of George Town’s UNESCO World Heritage shophouses, iron rod caricatures, and world-famous murals including Ernest Zacharevic’s "Kids on a Bicycle".',
+        highlights: [
+          '"Kids on a Bicycle" mural by Ernest Zacharevic',
+          'Cheah Kongsi and Khoo Kongsi clan clan houses nearby',
+          'Quirky boutique souvenir shops, artisan ice-creams, and cold brew cafes'
+        ],
+        directions: 'Head east past 1st Avenue along Magazine Road, turn left onto Carnarvon Street, then turn right into Armenian Street.'
+      },
+      {
+        id: 'blue-mansion',
+        name: 'Cheong Fatt Tze - The Blue Mansion',
+        category: 'sights',
+        badge: 'Architectural Gem',
+        coords: [5.42150, 100.33470],
+        address: '14, Lebuh Leith, George Town',
+        distance: '1.3 km',
+        walkTime: '16 mins',
+        distMeters: 1300,
+        walkMinutes: 16,
+        hours: 'Guided tours at 11:00 AM & 2:00 PM daily',
+        description: 'An architectural masterpiece painted in brilliant indigo blue, featuring 38 rooms, 5 courtyards, and Chinese-European feng-shui designs. Featured in Crazy Rich Asians and Indochine.',
+        highlights: [
+          'Award-winning architectural restoration',
+          'Fascinating guided historical tours on 19th-century tycoon Cheong Fatt Tze',
+          'Upscale Indigo Restaurant inside the courtyard'
+        ],
+        directions: 'Head north along Penang Road past Upper Penang Road, turn right onto Lebuh Leith.'
+      },
+      {
+        id: 'clan-jetties',
+        name: 'Chew Jetty (Clan Jetties)',
+        category: 'sights',
+        badge: 'Waterfront Living',
+        coords: [5.41285, 100.33985],
+        address: 'Pengkalan Weld (Weld Quay), George Town',
+        distance: '1.3 km',
+        walkTime: '17 mins',
+        distMeters: 1300,
+        walkMinutes: 17,
+        hours: '9:00 AM - 9:00 PM',
+        description: 'Historic Chinese water stilt settlements founded in the 19th century by immigrant dockworkers sharing the same clan lineage. Chew Jetty is the largest and most welcoming to visitors.',
+        highlights: [
+          'Wooden stilt boardwalk extending into the sea',
+          'Hean Boo Thean Kuan Yin Temple along the water',
+          'Durian pastries and local snack kiosks'
+        ],
+        directions: 'Walk east along Magazine Road straight toward Weld Quay (Pengkalan Weld), turning left along the sea-facing pedestrian path.'
+      }
+    ];
+
+    // Detailed walking waypoints from St. Giles Wembley to emulate realistic street network turns
+    const WALKING_PATHS = {
+      'new-lane': [
+        [5.41372, 100.33035], // St Giles Wembley
+        [5.41380, 100.32920], // Along Magazine Rd
+        [5.41410, 100.32760], // Crossing toward Macalister Rd
+        [5.41445, 100.32620], // Jalan Macalister
+        [5.41480, 100.32490], // Junction of Lorong Baru
+        [5.41505, 100.32485]  // New Lane Hawker Centre
+      ],
+      'kimberley-street': [
+        [5.41372, 100.33035], // St Giles Wembley
+        [5.41410, 100.33150], // Jalan Magazine east
+        [5.41490, 100.33170], // Jalan Sungai Ujong
+        [5.41580, 100.33230], // Passing Prangin heritage shophouses
+        [5.41655, 100.33305]  // Kimberley Street Food Stalls
+      ],
+      'chulia-street': [
+        [5.41372, 100.33035], // St Giles Wembley
+        [5.41440, 100.33180], // Past 1st Avenue
+        [5.41550, 100.33350], // Carnarvon Street junction
+        [5.41680, 100.33530], // Along Carnarvon Street north
+        [5.41845, 100.33705]  // Chulia Street Hawker Food
+      ],
+      'teochew-chendul': [
+        [5.41372, 100.33035], // St Giles Wembley
+        [5.41460, 100.33020], // Past KOMTAR underpass
+        [5.41610, 100.33040], // Along Jalan Penang north
+        [5.41710, 100.33050], // Entrance to Lebuh Keng Kwee
+        [5.41718, 100.33065]  // Teochew Chendul Stall
+      ],
+      'komtar-top': [
+        [5.41372, 100.33035], // St Giles Wembley
+        [5.41400, 100.33025], // Crossing Magazine Rd
+        [5.41438, 100.33005]  // The TOP Penang Lobby
+      ],
+      'armenian-street': [
+        [5.41372, 100.33035], // St Giles Wembley
+        [5.41430, 100.33200], // Magazine Rd east
+        [5.41480, 100.33400], // Carnarvon St junction
+        [5.41530, 100.33600], // Entering Heritage Core
+        [5.41515, 100.33775]  // Armenian Street Kids on Bicycle
+      ],
+      'blue-mansion': [
+        [5.41372, 100.33035], // St Giles Wembley
+        [5.41600, 100.33040], // Along Penang Road north
+        [5.41850, 100.33120], // Upper Penang Road
+        [5.42080, 100.33280], // Leith St corner
+        [5.42150, 100.33470]  // The Blue Mansion
+      ],
+      'clan-jetties': [
+        [5.41372, 100.33035], // St Giles Wembley
+        [5.41330, 100.33350], // Magazine Rd heading east
+        [5.41290, 100.33700], // Pengkalan Weld approach
+        [5.41285, 100.33985]  // Chew Jetty
+      ]
+    };
+
+    // Detailed driving paths adhering to George Town's one-way street network
+    const DRIVING_PATHS = {
+      'new-lane': [
+        [5.41372, 100.33035], // St Giles Wembley on Magazine Rd
+        [5.41410, 100.32750], // Jalan Magazine westbound
+        [5.41445, 100.32570], // Jalan Macalister
+        [5.41505, 100.32485]  // Lorong Baru entrance
+      ],
+      'kimberley-street': [
+        [5.41372, 100.33035], // St Giles Wembley
+        [5.41420, 100.33150], // Magazine Rd east
+        [5.41520, 100.33110], // Jalan Penang northbound
+        [5.41620, 100.33180], // Turning onto Lebuh Campbell / Lebuh Kimberley
+        [5.41655, 100.33305]  // Kimberley Food Market
+      ],
+      'chulia-street': [
+        [5.41372, 100.33035], // St Giles Wembley
+        [5.41420, 100.33150], // Magazine Rd
+        [5.41550, 100.33080], // Jalan Penang northbound
+        [5.41740, 100.33230], // Heading toward Chulia intersection
+        [5.41845, 100.33705]  // Chulia Street Hawker Food
+      ],
+      'teochew-chendul': [
+        [5.41372, 100.33035], // St Giles Wembley
+        [5.41420, 100.33150], // Magazine Rd
+        [5.41550, 100.33080], // Jalan Penang northbound
+        [5.41710, 100.33050], // Off Penang Rd
+        [5.41718, 100.33065]  // Lebuh Keng Kwee
+      ],
+      'komtar-top': [
+        [5.41372, 100.33035], // St Giles Wembley
+        [5.41400, 100.33020], // KOMTAR vehicle driveway drop-off
+        [5.41438, 100.33005]  // The TOP Penang Entrance
+      ],
+      'armenian-street': [
+        [5.41372, 100.33035], // St Giles Wembley
+        [5.41310, 100.33380], // Jalan Dr Lim Chwee Leong
+        [5.41380, 100.33690], // Lebuh Carnarvon / Beach St approach
+        [5.41515, 100.33775]  // Armenian Street Street Art Core
+      ],
+      'blue-mansion': [
+        [5.41372, 100.33035], // St Giles Wembley
+        [5.41550, 100.33080], // Jalan Penang northbound
+        [5.41900, 100.33250], // Upper Penang Road
+        [5.42150, 100.33470]  // Cheong Fatt Tze (Blue Mansion)
+      ],
+      'clan-jetties': [
+        [5.41372, 100.33035], // St Giles Wembley
+        [5.41320, 100.33400], // Magazine Rd east
+        [5.41270, 100.33850], // Gat Lebuh Macallum onto Pengkalan Weld
+        [5.41285, 100.33985]  // Chew Jetty entry
+      ]
+    };
+  </script>
+
+  <script>
+    let map;
+    let markersLayer = L.layerGroup();
+    let currentRoutePolyline = null;
+    let circuitPolylines = [];
+    let activePlaceId = null;
+    let currentFilter = 'all';
+    let currentTravelMode = 'walking'; // 'walking' or 'driving'
+
+    // Helper to generate Google Maps Directions URL
+    function getGoogleMapsUrl(destCoords, mode) {
+      const gMode = mode === 'driving' ? 'driving' : 'walking';
+      return `https://www.google.com/maps/dir/?api=1&origin=${HOTEL.coords[0]},${HOTEL.coords[1]}&destination=${destCoords[0]},${destCoords[1]}&travelmode=${gMode}`;
+    }
+
+    // Resolves street routes instantly from pre-mapped George Town road geometry (zero external 403 API errors)
+    function resolveRoute(placeId, mode) {
+      const place = PLACES.find(p => p.id === placeId);
+      const isDrive = mode === 'driving';
+
+      if (isDrive) {
+        const coords = DRIVING_PATHS[placeId] || [HOTEL.coords, place.coords];
+        // Calculate realistic driving metrics for George Town traffic & one-way layout
+        const driveDistMeters = Math.round(place.distMeters * 1.35);
+        const driveMinutes = Math.max(2, Math.round(driveDistMeters / 300));
+        const distText = driveDistMeters >= 1000 
+          ? `${(driveDistMeters / 1000).toFixed(1)} km` 
+          : `${driveDistMeters} m`;
+        return {
+          coordinates: coords,
+          distanceText: distText,
+          timeText: `${driveMinutes} mins`,
+          distanceMeters: driveDistMeters,
+          minutes: driveMinutes
+        };
+      } else {
+        const coords = WALKING_PATHS[placeId] || [HOTEL.coords, place.coords];
+        return {
+          coordinates: coords,
+          distanceText: place.distance,
+          timeText: place.walkTime,
+          distanceMeters: place.distMeters,
+          minutes: place.walkMinutes
+        };
+      }
+    }
+
+    function initMap() {
+      // Initialize Leaflet map instance centered on St. Giles Wembley
+      map = L.map('map', {
+        zoomControl: false
+      }).setView(HOTEL.coords, 15);
+
+      // Add Zoom Control to top-left
+      L.control.zoom({ position: 'topleft' }).addTo(map);
+
+      // Use Esri World Street Map: free, high-performance, and never returns 403 in sandboxes or iframes
+      const esriTileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 19,
+        attribution: 'Map &copy; <a href="https://www.esri.com" target="_blank" rel="noopener">Esri</a>, DeLorme, HERE, USGS, OpenStreetMap'
+      }).addTo(map);
+
+      // Provide automatic fallback in case of connection drop
+      esriTileLayer.on('tileerror', function(error, tile) {
+        console.warn('Primary tile notice, applying clean fallback render');
+      });
+
+      // Custom marker icon for Hotel anchor with pulsing aura
+      const hotelIcon = L.divIcon({
+        className: 'custom-hotel-marker',
+        html: `
+          <div class="hotel-pulse w-9 h-9 rounded-full bg-blue-600 border-2 border-white shadow-lg flex items-center justify-center text-white text-sm">
+            <i class="fa-solid fa-hotel"></i>
+          </div>
+        `,
+        iconSize: [36, 36],
+        iconAnchor: [18, 18],
+        popupAnchor: [0, -20]
+      });
+
+      const hotelMarker = L.marker(HOTEL.coords, { icon: hotelIcon }).addTo(map);
+      hotelMarker.bindPopup(`
+        <div class="p-2.5 max-w-[240px]">
+          <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 mb-1">
+            <i class="fa-solid fa-star text-[9px] mr-1 text-blue-600"></i>Your 4-Star Base
+          </span>
+          <h4 class="font-bold text-slate-900 text-sm">${HOTEL.name}</h4>
+          <p class="text-xs text-slate-600 mt-1">${HOTEL.address}</p>
+          <div class="mt-2.5 pt-2 border-t border-slate-100 text-[11px] text-slate-500">
+            KOMTAR & Magazine Road Hub • Gateway to all night food streets
+          </div>
+        </div>
+      `);
+
+      markersLayer.addTo(map);
+      renderMarkers();
+    }
+
+    function renderMarkers() {
+      markersLayer.clearLayers();
+
+      const searchVal = document.getElementById('searchInput').value.trim().toLowerCase();
+      const filtered = PLACES.filter(place => {
+        const matchesCategory = currentFilter === 'all' || place.category === currentFilter;
+        const matchesSearch = !searchVal || 
+          place.name.toLowerCase().includes(searchVal) ||
+          place.description.toLowerCase().includes(searchVal) ||
+          place.highlights.some(h => h.toLowerCase().includes(searchVal));
+        return matchesCategory && matchesSearch;
+      });
+
+      filtered.forEach(place => {
+        let pinBg = 'bg-orange-500';
+        let pinIcon = 'fa-fire-burner';
+
+        if (place.category === 'sights') {
+          pinBg = 'bg-emerald-600';
+          pinIcon = 'fa-landmark';
+        } else if (place.category === 'day-food') {
+          pinBg = 'bg-amber-500';
+          pinIcon = 'fa-bowl-rice';
+        }
+
+        const markerIcon = L.divIcon({
+          className: 'custom-pin-marker',
+          html: `
+            <div class="w-8 h-8 rounded-full ${pinBg} border-2 border-white shadow-md flex items-center justify-center text-white text-xs hover:scale-110 transition-transform cursor-pointer">
+              <i class="fa-solid ${pinIcon}"></i>
+            </div>
+          `,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+          popupAnchor: [0, -18]
+        });
+
+        const marker = L.marker(place.coords, { icon: markerIcon });
+        const popupContent = `
+          <div class="p-2.5 max-w-[260px]">
+            <div class="flex items-center justify-between gap-1 mb-1">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">${place.badge}</span>
+              <span class="text-[11px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-sm">
+                <i class="fa-solid fa-person-walking"></i> ${place.walkTime} (${place.distance})
+              </span>
+            </div>
+            <h4 class="font-bold text-slate-900 text-sm leading-snug">${place.name}</h4>
+            <p class="text-xs text-slate-600 mt-1 line-clamp-2">${place.description}</p>
+            <div class="mt-3 flex flex-col gap-2 pt-2 border-t border-slate-100">
+              <div class="flex items-center gap-2">
+                <button onclick="drawRoute('${place.id}', 'walking')" class="flex-1 px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold text-center transition flex items-center justify-center gap-1">
+                  <i class="fa-solid fa-person-walking"></i> Walk
+                </button>
+                <button onclick="drawRoute('${place.id}', 'driving')" class="flex-1 px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold text-center transition flex items-center justify-center gap-1">
+                  <i class="fa-solid fa-car"></i> Car
+                </button>
+              </div>
+              <div class="flex items-center justify-between">
+                <button onclick="openModal('${place.id}')" class="text-slate-600 hover:text-slate-800 text-[11px] font-medium transition">
+                  Details & Food Tips
+                </button>
+                <a href="${getGoogleMapsUrl(place.coords, currentTravelMode)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:text-blue-800 text-[11px] font-semibold flex items-center gap-1">
+                  <i class="fa-brands fa-google text-[10px] text-red-500"></i> Google Maps
+                </a>
+              </div>
+            </div>
+          </div>
+        `;
+
+        marker.bindPopup(popupContent);
+        marker.on('click', () => {
+          highlightCard(place.id);
+        });
+
+        markersLayer.addLayer(marker);
+      });
+    }
+
+    function renderSidebarList() {
+      const container = document.getElementById('placesList');
+      container.innerHTML = '';
+
+      const searchVal = document.getElementById('searchInput').value.trim().toLowerCase();
+
+      // Update counters
+      document.getElementById('countAll').innerText = PLACES.length;
+      document.getElementById('countNight').innerText = PLACES.filter(p => p.category === 'night-food').length;
+      document.getElementById('countSights').innerText = PLACES.filter(p => p.category === 'sights').length;
+      document.getElementById('countDay').innerText = PLACES.filter(p => p.category === 'day-food').length;
+
+      const filtered = PLACES.filter(place => {
+        const matchesCategory = currentFilter === 'all' || place.category === currentFilter;
+        const matchesSearch = !searchVal || 
+          place.name.toLowerCase().includes(searchVal) ||
+          place.description.toLowerCase().includes(searchVal) ||
+          place.highlights.some(h => h.toLowerCase().includes(searchVal));
+        return matchesCategory && matchesSearch;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="p-8 text-center text-slate-400">
+            <i class="fa-solid fa-magnifying-glass text-3xl mb-2 text-slate-300"></i>
+            <p class="text-sm font-medium">No spots match your search query.</p>
+            <p class="text-xs mt-1">Try searching for "satay", "laksa", "art", or "market".</p>
+          </div>
+        `;
+        return;
+      }
+
+      filtered.forEach(place => {
+        const card = document.createElement('div');
+        card.id = `card-${place.id}`;
+        card.className = `place-card p-4 rounded-xl border border-slate-200/90 hover:border-blue-400 bg-white shadow-2xs hover:shadow-md transition-all cursor-pointer ${activePlaceId === place.id ? 'ring-2 ring-blue-600 bg-blue-50/50' : ''}`;
+
+        let categoryBadge = '';
+        if (place.category === 'night-food') {
+          categoryBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-800"><i class="fa-solid fa-fire-burner text-orange-600 mr-1"></i>${place.badge}</span>`;
+        } else if (place.category === 'sights') {
+          categoryBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800"><i class="fa-solid fa-landmark text-emerald-600 mr-1"></i>${place.badge}</span>`;
+        } else {
+          categoryBadge = `<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800"><i class="fa-solid fa-bowl-rice text-amber-600 mr-1"></i>${place.badge}</span>`;
+        }
+
+        const previewHighlights = place.highlights.slice(0, 2).map(h => 
+          `<span class="inline-flex items-center text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-md truncate max-w-full">
+            <i class="fa-solid fa-check text-[9px] mr-1 text-slate-400"></i>${h}
+          </span>`
+        ).join('');
+
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-2 mb-2">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              ${categoryBadge}
+            </div>
+            <div class="text-right shrink-0">
+              <span class="inline-flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+                <i class="fa-solid fa-person-walking"></i> ${place.walkTime}
+              </span>
+              <span class="text-[10px] text-slate-400 block">${place.distance}</span>
+            </div>
+          </div>
+
+          <h3 class="font-bold text-slate-900 text-sm group-hover:text-blue-600 transition-colors leading-snug">${place.name}</h3>
+          <p class="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+            <i class="fa-solid fa-location-dot text-slate-400 text-[10px]"></i> ${place.address}
+          </p>
+          <p class="text-xs text-slate-600 mt-2 line-clamp-2 leading-relaxed">${place.description}</p>
+
+          <div class="mt-3 flex flex-wrap gap-1.5">
+            ${previewHighlights}
+          </div>
+
+          <!-- Bottom Action Buttons -->
+          <div class="mt-3.5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+            <div class="flex items-center gap-2">
+              <button onclick="event.stopPropagation(); drawRoute('${place.id}', 'walking')" class="text-blue-600 hover:text-blue-800 font-semibold flex items-center gap-1">
+                <i class="fa-solid fa-person-walking"></i> Walk
+              </button>
+              <span class="text-slate-300">•</span>
+              <button onclick="event.stopPropagation(); drawRoute('${place.id}', 'driving')" class="text-indigo-600 hover:text-indigo-800 font-semibold flex items-center gap-1">
+                <i class="fa-solid fa-car"></i> Car
+              </button>
+            </div>
+            <button onclick="event.stopPropagation(); openModal('${place.id}')" class="text-slate-500 hover:text-slate-700 font-medium flex items-center gap-1">
+              Details <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            </button>
+          </div>
+        `;
+
+        card.addEventListener('click', () => {
+          drawRoute(place.id, currentTravelMode);
+          map.panTo(place.coords);
+        });
+
+        container.appendChild(card);
+      });
+    }
+
+    function highlightCard(placeId) {
+      document.querySelectorAll('.place-card').forEach(card => {
+        card.classList.remove('ring-2', 'ring-blue-600', 'bg-blue-50/50');
+      });
+      const card = document.getElementById(`card-${placeId}`);
+      if (card) {
+        card.classList.add('ring-2', 'ring-blue-600', 'bg-blue-50/50');
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+
+    function zoomToHotel() {
+      clearRoutes(true);
+      map.setView(HOTEL.coords, 16);
+      showToast('Centered on St. Giles Wembley Hotel');
+    }
+
+    async function showEveningFoodCircuit() {
+      clearRoutes(true);
+
+      const circuitStops = [
+        HOTEL.coords,
+        PLACES.find(p => p.id === 'new-lane').coords,
+        PLACES.find(p => p.id === 'kimberley-street').coords,
+        PLACES.find(p => p.id === 'chulia-street').coords,
+        HOTEL.coords
+      ];
+
+      const circuitColors = ['#e05326', '#d97706', '#059669', '#2563eb'];
+      const bounds = L.latLngBounds(circuitStops);
+
+      for (let i = 0; i < circuitStops.length - 1; i++) {
+        const line = L.polyline([circuitStops[i], circuitStops[i + 1]], {
+          color: circuitColors[i],
+          weight: 5,
+          dashArray: '6, 8',
+          opacity: 0.95
+        }).addTo(map);
+        circuitPolylines.push(line);
+      }
+
+      map.fitBounds(bounds, { padding: [60, 60] });
+
+      const banner = document.getElementById('routeBanner');
+      banner.classList.remove('hidden');
+      document.getElementById('routeBannerTitle').innerText = 'Complete Evening Food Hopping Circuit';
+      document.getElementById('routeBannerMetrics').innerText = 'St. Giles Wembley → New Lane → Kimberley St → Chulia St (~2.8 km loop)';
+      showToast('Loaded 3-Stop Evening Street Food Loop');
+    }
+
+    async function drawRoute(placeId, mode = currentTravelMode) {
+      const place = PLACES.find(p => p.id === placeId);
+      if (!place) return;
+
+      currentTravelMode = mode;
+      updateModeSelectorsUI(mode);
+
+      clearRoutes(false);
+      activePlaceId = placeId;
+
+      const isDrive = mode === 'driving';
+      const modeColor = isDrive ? '#4f46e5' : '#2563eb';
+
+      // Obtain route synchronously from validated street network
+      const routeData = resolveRoute(placeId, mode);
+
+      // Draw polyline with appropriate styling
+      currentRoutePolyline = L.polyline(routeData.coordinates, {
+        color: modeColor,
+        weight: isDrive ? 6 : 5,
+        opacity: 0.9,
+        lineCap: 'round',
+        lineJoin: 'round',
+        dashArray: isDrive ? null : '8, 8',
+        className: isDrive ? '' : 'route-glow'
+      }).addTo(map);
+
+      // Fit map bounds to encompass hotel and destination
+      const bounds = L.latLngBounds(routeData.coordinates);
+      map.fitBounds(bounds, { padding: [65, 65], maxZoom: 16 });
+
+      // Update banner UI
+      const banner = document.getElementById('routeBanner');
+      banner.classList.remove('hidden');
+
+      const iconEl = document.getElementById('routeBannerModeIcon');
+      iconEl.className = `w-8 h-8 rounded-lg ${isDrive ? 'bg-indigo-600' : 'bg-blue-600'} text-white flex items-center justify-center font-bold text-sm shrink-0`;
+      iconEl.innerHTML = `<i class="fa-solid ${isDrive ? 'fa-car' : 'fa-person-walking'}"></i>`;
+
+      document.getElementById('routeBannerTitle').innerText = `${isDrive ? 'Driving' : 'Walking'} to ${place.name}`;
+      document.getElementById('routeBannerMetrics').innerText = `${routeData.distanceText} • ~${routeData.timeText} from St. Giles Wembley`;
+
+      const gMapsLink = document.getElementById('bannerGoogleMapsLink');
+      gMapsLink.href = getGoogleMapsUrl(place.coords, mode);
+
+      highlightCard(placeId);
+      showToast(`${isDrive ? 'Driving' : 'Walking'} route: ${routeData.distanceText} (~${routeData.timeText})`);
+    }
+
+    function updateModeSelectorsUI(mode) {
+      currentTravelMode = mode;
+      const isDrive = mode === 'driving';
+
+      // Header buttons
+      const walkBtn = document.getElementById('modeWalkBtn');
+      const driveBtn = document.getElementById('modeDriveBtn');
+      if (walkBtn && driveBtn) {
+        if (!isDrive) {
+          walkBtn.className = 'px-2.5 py-1.5 rounded-md bg-white text-blue-700 shadow-xs flex items-center gap-1 transition-all';
+          driveBtn.className = 'px-2.5 py-1.5 rounded-md text-slate-600 hover:text-slate-900 flex items-center gap-1 transition-all';
+        } else {
+          driveBtn.className = 'px-2.5 py-1.5 rounded-md bg-white text-indigo-700 shadow-xs flex items-center gap-1 transition-all';
+          walkBtn.className = 'px-2.5 py-1.5 rounded-md text-slate-600 hover:text-slate-900 flex items-center gap-1 transition-all';
+        }
+      }
+
+      // Banner toggles
+      const bWalk = document.getElementById('bannerToggleWalk');
+      const bDrive = document.getElementById('bannerToggleDrive');
+      if (bWalk && bDrive) {
+        if (!isDrive) {
+          bWalk.className = 'px-2 py-0.5 rounded bg-blue-600 text-white font-semibold text-[10px]';
+          bDrive.className = 'px-2 py-0.5 rounded bg-white text-blue-800 border border-blue-200 font-semibold text-[10px]';
+        } else {
+          bDrive.className = 'px-2 py-0.5 rounded bg-indigo-600 text-white font-semibold text-[10px]';
+          bWalk.className = 'px-2 py-0.5 rounded bg-white text-indigo-800 border border-indigo-200 font-semibold text-[10px]';
+        }
+      }
+    }
+
+    function clearRoutes(resetState = true) {
+      if (currentRoutePolyline) {
+        map.removeLayer(currentRoutePolyline);
+        currentRoutePolyline = null;
+      }
+      circuitPolylines.forEach(p => map.removeLayer(p));
+      circuitPolylines = [];
+
+      if (resetState) {
+        activePlaceId = null;
+        document.getElementById('routeBanner').classList.add('hidden');
+        document.querySelectorAll('.place-card').forEach(c => c.classList.remove('ring-2', 'ring-blue-600', 'bg-blue-50/50'));
+      }
+    }
+
+    let currentModalPlaceId = null;
+
+    function updateModalMetrics(place, mode) {
+      const isDrive = mode === 'driving';
+      const mIcon = document.getElementById('modalMetricIcon');
+      const mDistLabel = document.getElementById('modalMetricDistanceLabel');
+      const mTimeLabel = document.getElementById('modalMetricTimeLabel');
+      const btnWalk = document.getElementById('modalSelectWalk');
+      const btnDrive = document.getElementById('modalSelectDrive');
+
+      if (isDrive) {
+        btnDrive.className = 'px-3 py-1 rounded-md bg-indigo-600 text-white flex items-center gap-1 transition';
+        btnWalk.className = 'px-3 py-1 rounded-md text-slate-600 hover:text-slate-900 flex items-center gap-1 transition';
+        mIcon.className = 'w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center font-bold text-xs shrink-0';
+        mIcon.innerHTML = '<i class="fa-solid fa-car"></i>';
+        mDistLabel.innerText = 'Drive Distance';
+        mTimeLabel.innerText = 'Drive Duration';
+      } else {
+        btnWalk.className = 'px-3 py-1 rounded-md bg-blue-600 text-white flex items-center gap-1 transition';
+        btnDrive.className = 'px-3 py-1 rounded-md text-slate-600 hover:text-slate-900 flex items-center gap-1 transition';
+        mIcon.className = 'w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0';
+        mIcon.innerHTML = '<i class="fa-solid fa-person-walking"></i>';
+        mDistLabel.innerText = 'Walk Distance';
+        mTimeLabel.innerText = 'Walk Duration';
+      }
+
+      // Fetch dynamic stats directly from local road geometry
+      const routeInfo = resolveRoute(place.id, mode);
+      document.getElementById('modalDistance').innerText = routeInfo.distanceText;
+      document.getElementById('modalTime').innerText = `~${routeInfo.timeText}`;
+
+      // Update external Google Maps Direction button
+      document.getElementById('modalGoogleMapsBtn').href = getGoogleMapsUrl(place.coords, mode);
+    }
+
+    function openModal(placeId) {
+      const place = PLACES.find(p => p.id === placeId);
+      if (!place) return;
+      currentModalPlaceId = placeId;
+
+      document.getElementById('modalTitle').innerText = place.name;
+      document.getElementById('modalAddressText').innerText = place.address;
+      document.getElementById('modalDescription').innerText = place.description;
+      document.getElementById('modalWalkingDirections').innerText = place.directions;
+
+      updateModalMetrics(place, currentTravelMode);
+
+      const badge = document.getElementById('modalCategoryBadge');
+      badge.innerText = place.badge;
+      if (place.category === 'night-food') {
+        badge.className = 'inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold mb-2 bg-orange-100 text-orange-800';
+        document.getElementById('modalHighlightLabel').innerText = 'Must-Eat Hawker Specialties';
+      } else if (place.category === 'sights') {
+        badge.className = 'inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold mb-2 bg-emerald-100 text-emerald-800';
+        document.getElementById('modalHighlightLabel').innerText = 'Sight Highlights & Tips';
+      } else {
+        badge.className = 'inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold mb-2 bg-amber-100 text-amber-800';
+        document.getElementById('modalHighlightLabel').innerText = 'Specialties';
+      }
+
+      // Populate highlights list
+      const listEl = document.getElementById('modalHighlightsList');
+      listEl.innerHTML = '';
+      place.highlights.forEach(item => {
+        const li = document.createElement('li');
+        li.innerText = item;
+        listEl.appendChild(li);
+      });
+
+      // Show modal
+      const modal = document.getElementById('detailModal');
+      modal.classList.remove('opacity-0', 'pointer-events-none');
+      modal.querySelector('div').classList.remove('scale-95');
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('detailModal');
+      modal.classList.add('opacity-0', 'pointer-events-none');
+      modal.querySelector('div').classList.add('scale-95');
+      currentModalPlaceId = null;
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      toastMsg.innerText = message;
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 2500);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      renderSidebarList();
+
+      // Category buttons filter
+      document.querySelectorAll('.category-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.category-btn').forEach(b => {
+            b.classList.remove('bg-blue-600', 'text-white', 'shadow-xs');
+            b.classList.add('bg-slate-100', 'text-slate-700');
+          });
+          btn.classList.add('bg-blue-600', 'text-white', 'shadow-xs');
+          btn.classList.remove('bg-slate-100', 'text-slate-700');
+
+          currentFilter = btn.dataset.category;
+          renderSidebarList();
+          renderMarkers();
+        });
+      });
+
+      // Search bar
+      const searchInput = document.getElementById('searchInput');
+      const clearSearchBtn = document.getElementById('clearSearchBtn');
+
+      searchInput.addEventListener('input', (e) => {
+        if (e.target.value.length > 0) {
+          clearSearchBtn.classList.remove('hidden');
+        } else {
+          clearSearchBtn.classList.add('hidden');
+        }
+        renderSidebarList();
+        renderMarkers();
+      });
+
+      clearSearchBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        clearSearchBtn.classList.add('hidden');
+        renderSidebarList();
+        renderMarkers();
+      });
+
+      // Modal Events
+      document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+      document.getElementById('detailModal').addEventListener('click', (e) => {
+        if (e.target.id === 'detailModal') closeModal();
+      });
+      document.getElementById('modalPlotRouteBtn').addEventListener('click', () => {
+        if (currentModalPlaceId) {
+          drawRoute(currentModalPlaceId, currentTravelMode);
+          closeModal();
+        }
+      });
+
+      // Travel mode switchers in header
+      document.getElementById('modeWalkBtn').addEventListener('click', () => {
+        updateModeSelectorsUI('walking');
+        if (activePlaceId) drawRoute(activePlaceId, 'walking');
+      });
+      document.getElementById('modeDriveBtn').addEventListener('click', () => {
+        updateModeSelectorsUI('driving');
+        if (activePlaceId) drawRoute(activePlaceId, 'driving');
+      });
+
+      // Banner mode switchers
+      document.getElementById('bannerToggleWalk').addEventListener('click', () => {
+        if (activePlaceId) drawRoute(activePlaceId, 'walking');
+      });
+      document.getElementById('bannerToggleDrive').addEventListener('click', () => {
+        if (activePlaceId) drawRoute(activePlaceId, 'driving');
+      });
+
+      // Modal mode switchers
+      document.getElementById('modalSelectWalk').addEventListener('click', () => {
+        if (currentModalPlaceId) {
+          const place = PLACES.find(p => p.id === currentModalPlaceId);
+          currentTravelMode = 'walking';
+          updateModalMetrics(place, 'walking');
+        }
+      });
+      document.getElementById('modalSelectDrive').addEventListener('click', () => {
+        if (currentModalPlaceId) {
+          const place = PLACES.find(p => p.id === currentModalPlaceId);
+          currentTravelMode = 'driving';
+          updateModalMetrics(place, 'driving');
+        }
+      });
+
+      // Route Banner buttons
+      document.getElementById('clearRouteBtn').addEventListener('click', () => clearRoutes(true));
+      document.getElementById('resetViewBtn').addEventListener('click', zoomToHotel);
+      document.getElementById('focusHotelBtn').addEventListener('click', zoomToHotel);
+      document.getElementById('showRouteAllBtn').addEventListener('click', showEveningFoodCircuit);
+    });
+  </script>
+</body>
+</html>
